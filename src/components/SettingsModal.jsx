@@ -15,7 +15,8 @@ import {
   Zap,
   Play,
   CheckCircle2,
-  Check
+  Check,
+  BookOpen
 } from 'lucide-react';
 import {
   playKeypressSound,
@@ -37,6 +38,8 @@ export const SettingsModal = ({
   toggleSound = () => {},
   highContrast = false,
   setHighContrast = () => {},
+  allowInvalidWords = false,
+  setAllowInvalidWords = () => {},
   onResetStats = () => {}
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -96,6 +99,19 @@ export const SettingsModal = ({
         [ { char: 'G', state: 'correct' }, { char: 'O', state: 'present' }, { char: 'L', state: 'absent' } ],
         [ { char: 'D', state: 'absent' }, { char: 'A', state: 'correct' }, { char: 'Y', state: 'present' } ]
       ]
+    },
+    {
+      id: 'emerald',
+      name: 'Emerald',
+      accent: '#10b981',
+      correct: '#10b981',
+      present: '#f59e0b',
+      absent: '#134e4a',
+      bg: '#062c24',
+      rows: [
+        [ { char: 'G', state: 'correct' }, { char: 'E', state: 'present' }, { char: 'M', state: 'absent' } ],
+        [ { char: 'O', state: 'absent' }, { char: 'A', state: 'correct' }, { char: 'K', state: 'present' } ]
+      ]
     }
   ];
 
@@ -152,6 +168,10 @@ export const SettingsModal = ({
             <span className="pref-pill" style={{ opacity: hardMode ? 1 : 0.6 }}>
               <Shield className="w-3 h-3 text-amber-400" />
               Hard Mode
+            </span>
+            <span className="pref-pill" style={{ opacity: allowInvalidWords ? 1 : 0.6 }}>
+              <BookOpen className="w-3 h-3 text-pink-400" />
+              {allowInvalidWords ? 'Any Word' : 'Strict Words'}
             </span>
             <span className="pref-pill capitalize">
               <Palette className="w-3 h-3" style={{ color: 'var(--accent-color)' }} />
@@ -425,6 +445,38 @@ export const SettingsModal = ({
                   <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--tile-empty-border)' }}>
                     <div className="w-2 h-2 rounded-full bg-[#85c0f9]" />
                     <span className="text-[9px] font-bold">Blue</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Allow Invalid Words Toggle Card */}
+              <div
+                onClick={() => setAllowInvalidWords(!allowInvalidWords)}
+                className={`pref-switch-card ${allowInvalidWords ? 'active-switch' : ''}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-7 h-7 rounded-lg border flex items-center justify-center transition-colors"
+                      style={{
+                        background: allowInvalidWords ? 'rgba(236, 72, 153, 0.2)' : 'var(--bg-secondary)',
+                        borderColor: allowInvalidWords ? 'rgba(236, 72, 153, 0.4)' : 'var(--tile-empty-border)',
+                        color: allowInvalidWords ? '#ec4899' : 'var(--text-secondary)'
+                      }}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-extrabold text-xs">Allow Invalid Words</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                        {allowInvalidWords ? 'Any letter combo accepted' : 'Strict real dictionary only (Default)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Knob Switch Only */}
+                  <div className={`switch-toggle ${allowInvalidWords ? 'active-switch' : ''}`}>
+                    <div className="switch-knob" />
                   </div>
                 </div>
               </div>

@@ -45,7 +45,7 @@ export const GameBoard = ({
     rows.push(
       <div
         key={r}
-        className={`tile-row ${isCurrentRow && isShaking ? 'shake' : ''}`}
+        className={`tile-row ${isCurrentRow && isShaking ? 'shake invalid-row' : ''}`}
         style={{ gridTemplateColumns: `repeat(${wordLength}, minmax(0, 1fr))` }}
       >
         {tiles}

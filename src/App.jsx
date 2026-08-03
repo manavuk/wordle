@@ -31,7 +31,17 @@ const INITIAL_STATS = {
 };
 
 export function App() {
-  const [gameMode, setGameMode] = useState('solo');
+  const [gameMode, setGameMode] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.has('room') ? 'remote' : 'solo';
+  });
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('room') && gameMode !== 'remote') {
+      setGameMode('remote');
+    }
+  }, []);
   
   // Persistent Word Length (4, 5, or 6)
   const [wordLength, setWordLengthState] = useState(() => {
@@ -77,6 +87,16 @@ export function App() {
   const setHighContrast = (val) => {
     setHighContrastState(val);
     localStorage.setItem('wordle_highcontrast', val ? 'true' : 'false');
+  };
+
+  // Persistent Allow Invalid Words Setting (Default false - strict dictionary validation)
+  const [allowInvalidWords, setAllowInvalidWordsState] = useState(() => {
+    return localStorage.getItem('wordle_allow_invalid') === 'true';
+  });
+
+  const setAllowInvalidWords = (val) => {
+    setAllowInvalidWordsState(val);
+    localStorage.setItem('wordle_allow_invalid', val ? 'true' : 'false');
   };
 
   // Solo Game State
@@ -187,11 +207,13 @@ export function App() {
         return;
       }
 
-      if (!isValidWord(currentGuess, wordLength)) {
+      if (!isValidWord(currentGuess, wordLength, allowInvalidWords)) {
         setIsShaking(true);
         playInvalidSound();
         setStatusMessage('Not in word list!');
+        setCurrentGuess('');
         setTimeout(() => setIsShaking(false), 500);
+        setTimeout(() => setStatusMessage(''), 2000);
         return;
       }
 
@@ -288,9 +310,11 @@ export function App() {
       }
     } else if (key === 'BACKSPACE') {
       playKeypressSound();
+      setStatusMessage('');
       setCurrentGuess((prev) => prev.slice(0, -1));
     } else if (/^[A-Z]$/.test(key) && currentGuess.length < wordLength) {
       playKeypressSound();
+      setStatusMessage('');
       setCurrentGuess((prev) => prev + key);
     }
   };
@@ -421,9 +445,9 @@ export function App() {
           </div>
         )}
 
-        {gameMode === 'local' && <LocalMultiplayer wordLength={wordLength} maxGuesses={maxGuesses} />}
+        {gameMode === 'local' && <LocalMultiplayer wordLength={wordLength} maxGuesses={maxGuesses} allowInvalidWords={allowInvalidWords} />}
 
-        {gameMode === 'remote' && <RemoteMultiplayer wordLength={wordLength} maxGuesses={maxGuesses} />}
+        {gameMode === 'remote' && <RemoteMultiplayer wordLength={wordLength} maxGuesses={maxGuesses} allowInvalidWords={allowInvalidWords} />}
       </main>
 
       <StatsModal
@@ -446,6 +470,8 @@ export function App() {
         toggleSound={toggleSound}
         highContrast={highContrast}
         setHighContrast={setHighContrast}
+        allowInvalidWords={allowInvalidWords}
+        setAllowInvalidWords={setAllowInvalidWords}
         onResetStats={() => setStats(INITIAL_STATS)}
       />
     </div>

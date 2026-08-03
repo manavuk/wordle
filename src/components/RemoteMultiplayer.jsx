@@ -8,7 +8,7 @@ import { playKeypressSound, playFlipSound, playCorrectSound, playInvalidSound, p
 import confetti from 'canvas-confetti';
 import { Radio, Copy, Check, AlertCircle, ShieldAlert, ExternalLink, RefreshCw } from 'lucide-react';
 
-export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
+export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6, allowInvalidWords = false }) => {
   const [p2p] = useState(() => new P2PManager());
   const [connectionState, setConnectionState] = useState('idle');
   const [roomId, setRoomId] = useState('');
@@ -17,6 +17,7 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   const [targetWord, setTargetWord] = useState('');
+  const [activeWordLength, setActiveWordLength] = useState(wordLength);
 
   // Local Player State
   const [myGuesses, setMyGuesses] = useState([]);
@@ -50,8 +51,20 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
   const handleMessage = (data) => {
     if (!data) return;
 
-    if (data.type === 'START_GAME') {
+    if (data.type === 'GUEST_JOIN' && p2p.isHost) {
+      setConnectionState('connected');
+      setTargetWord((currentWord) => {
+        const wordToUse = currentWord || getRandomTargetWord(wordLength);
+        const lenToUse = data.wordLength || wordToUse.length;
+        setActiveWordLength(lenToUse);
+        p2p.send({ type: 'START_GAME', word: wordToUse, wordLength: lenToUse });
+        return wordToUse;
+      });
+    } else if (data.type === 'START_GAME') {
       setTargetWord(data.word);
+      const matchedLength = data.wordLength || (data.word ? data.word.length : wordLength);
+      setActiveWordLength(matchedLength);
+      setConnectionState('connected');
       resetLocalState();
     } else if (data.type === 'BOARD_UPDATE') {
       setOppGuesses(data.guesses || []);
@@ -101,7 +114,8 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
         setConnectionState('connected');
         const newWord = getRandomTargetWord(wordLength);
         setTargetWord(newWord);
-        p2p.send({ type: 'START_GAME', word: newWord });
+        setActiveWordLength(newWord.length);
+        p2p.send({ type: 'START_GAME', word: newWord, wordLength: newWord.length });
       },
       handleMessage,
       (err) => {
@@ -146,7 +160,8 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
   };
 
   const evaluateGuess = (guess, target) => {
-    const res = Array(wordLength).fill('absent');
+    const len = target ? target.length : activeWordLength;
+    const res = Array(len).fill('absent');
     const targetArr = target.split('');
     const guessArr = guess.split('');
 
@@ -171,9 +186,10 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
     if (myStatus !== 'playing' || connectionState !== 'connected') return;
 
     if (key === 'ENTER') {
-      if (myCurrent.length !== wordLength || !isValidWord(myCurrent, wordLength)) {
+      if (myCurrent.length !== activeWordLength || !isValidWord(myCurrent, activeWordLength, allowInvalidWords)) {
         setMyShaking(true);
         playInvalidSound();
+        setMyCurrent('');
         setTimeout(() => setMyShaking(false), 500);
         return;
       }
@@ -221,7 +237,7 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
     } else if (key === 'BACKSPACE') {
       playKeypressSound();
       setMyCurrent((prev) => prev.slice(0, -1));
-    } else if (/^[A-Z]$/.test(key) && myCurrent.length < wordLength) {
+    } else if (/^[A-Z]$/.test(key) && myCurrent.length < activeWordLength) {
       playKeypressSound();
       setMyCurrent((prev) => prev + key);
     }
@@ -389,7 +405,7 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
                 guesses={myGuesses}
                 currentGuess={myCurrent}
                 maxGuesses={maxGuesses}
-                wordLength={wordLength}
+                wordLength={activeWordLength}
                 evaluations={myEval}
                 isShaking={myShaking}
                 targetWord={targetWord}
@@ -434,7 +450,7 @@ export const RemoteMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
                 guesses={oppGuesses}
                 currentGuess=""
                 maxGuesses={maxGuesses}
-                wordLength={wordLength}
+                wordLength={activeWordLength}
                 evaluations={oppEval}
                 targetWord={targetWord}
               />

@@ -1,32 +1,43 @@
-import Peer from 'peerjs';
-
 export class P2PManager {
   constructor() {
-    this.peer = null;
-    this.conn = null;
+    this.ws = null;
+    this.bc = null;
+    this.storageListener = null;
     this.isHost = false;
     this.onMessageCallback = null;
     this.onStatusCallback = null;
     this.roomId = null;
+    this.pingInterval = null;
+    this.instanceId = 'peer_' + Math.random().toString(36).substring(2, 9);
+    this.isConnected = false;
   }
 
-  // Clean up existing connections
+  // Clean up all connection channels
   disconnect() {
-    if (this.conn) {
-      try {
-        this.conn.close();
-      } catch (e) {
-        console.error('Error closing connection:', e);
-      }
-      this.conn = null;
+    this.isConnected = false;
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
-    if (this.peer) {
+    if (this.storageListener && typeof window !== 'undefined') {
+      window.removeEventListener('storage', this.storageListener);
+      this.storageListener = null;
+    }
+    if (this.bc) {
       try {
-        this.peer.destroy();
+        this.bc.close();
       } catch (e) {
-        console.error('Error destroying peer:', e);
+        console.error('Error closing BroadcastChannel:', e);
       }
-      this.peer = null;
+      this.bc = null;
+    }
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {
+        console.error('Error closing WebSocket:', e);
+      }
+      this.ws = null;
     }
   }
 
@@ -36,45 +47,13 @@ export class P2PManager {
     this.isHost = true;
     this.onMessageCallback = onMessage;
 
-    // Generate neat short 6-character room code
     const shortId = 'WDL-' + Math.random().toString(36).substring(2, 7).toUpperCase();
     this.roomId = shortId;
 
-    try {
-      this.peer = new Peer(shortId, {
-        debug: 1,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-          ]
-        }
-      });
+    this.setupChannels(shortId, onConnect, onError);
 
-      this.peer.on('open', (id) => {
-        if (onRoomCreated) onRoomCreated(id);
-      });
-
-      this.peer.on('connection', (connection) => {
-        this.conn = connection;
-        this.setupConnectionHandlers(onConnect, onError);
-      });
-
-      this.peer.on('error', (err) => {
-        console.error('PeerJS Host Error:', err);
-        let msg = 'Failed to create room signaling session.';
-        if (err.type === 'unavailable-id') {
-          msg = 'Room code collision. Please try creating a room again.';
-        } else if (err.type === 'network') {
-          msg = 'Network connection to PeerJS server failed.';
-        }
-        if (onError) onError(new Error(msg));
-      });
-    } catch (err) {
-      console.error('PeerJS Initialization Error:', err);
-      if (onError) onError(err);
+    if (onRoomCreated) {
+      onRoomCreated(shortId);
     }
   }
 
@@ -83,80 +62,135 @@ export class P2PManager {
     this.disconnect();
     this.isHost = false;
     this.onMessageCallback = onMessage;
+
     const cleanRoomId = roomId.trim().toUpperCase();
     this.roomId = cleanRoomId;
 
-    try {
-      this.peer = new Peer({
-        debug: 1,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:global.stun.twilio.com:3478' }
-          ]
-        }
-      });
+    this.setupChannels(cleanRoomId, onConnect, onError);
 
-      this.peer.on('open', () => {
-        this.conn = this.peer.connect(this.roomId, { reliable: true });
-        this.setupConnectionHandlers(onConnect, onError);
-      });
+    // Ping Host every 500ms over all active channels until match is established
+    this.pingInterval = setInterval(() => {
+      if (!this.isConnected) {
+        this.send({ type: 'GUEST_JOIN' });
+      }
+    }, 500);
 
-      this.peer.on('error', (err) => {
-        console.error('PeerJS Guest Error:', err);
-        let msg = 'Could not connect to host. Please verify room code.';
-        if (err.type === 'peer-unavailable') {
-          msg = 'Room code not found or Host has closed the session.';
-        }
-        if (onError) onError(new Error(msg));
-      });
-    } catch (err) {
-      console.error('PeerJS Join Error:', err);
-      if (onError) onError(err);
-    }
+    // Initial immediate ping
+    this.send({ type: 'GUEST_JOIN' });
   }
 
-  setupConnectionHandlers(onConnect, onError) {
-    if (!this.conn) return;
+  setupChannels(roomId, onConnect, onError) {
+    const handleIncomingMessage = (data) => {
+      if (!data || data._sender === this.instanceId) return;
 
-    const notifyConnect = () => {
-      if (onConnect) onConnect();
-    };
+      if (this.isHost && data.type === 'GUEST_JOIN') {
+        if (!this.isConnected) {
+          this.isConnected = true;
+          if (onConnect) onConnect();
+        }
+      } else if (!this.isHost && data.type === 'START_GAME') {
+        if (!this.isConnected) {
+          this.isConnected = true;
+          if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+          }
+          if (onConnect) onConnect();
+        }
+      }
 
-    // Fix for PeerJS Gotcha: connection may already be open when received by Host
-    if (this.conn.open) {
-      notifyConnect();
-    } else {
-      this.conn.on('open', notifyConnect);
-    }
-
-    this.conn.on('data', (data) => {
       if (this.onMessageCallback) {
         this.onMessageCallback(data);
       }
-    });
+    };
 
-    this.conn.on('close', () => {
-      if (this.onStatusCallback) {
-        this.onStatusCallback('disconnected');
+    if (typeof window !== 'undefined') {
+      // 1. WebSocket Signaling Server (Primary transport across windows, browsers, and devices)
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/p2p-signaling`;
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+          this.ws.send(JSON.stringify({ type: 'JOIN_ROOM', roomId }));
+          if (!this.isHost) {
+            this.send({ type: 'GUEST_JOIN' });
+          }
+        };
+
+        this.ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'GAME_MESSAGE') {
+              handleIncomingMessage(data.payload);
+            }
+          } catch (e) {
+            console.error('Error parsing P2P message:', e);
+          }
+        };
+
+        this.ws.onerror = (err) => {
+          console.warn('P2P WebSocket signaling error:', err);
+        };
+      } catch (e) {
+        console.warn('WebSocket signaling unavailable:', e);
       }
-    });
 
-    this.conn.on('error', (err) => {
-      console.error('PeerJS Connection Error:', err);
-      if (onError) onError(err);
-    });
+      // 2. BroadcastChannel (Intra-browser tab fallback)
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          this.bc = new BroadcastChannel('wordle_p2p_' + roomId);
+          this.bc.onmessage = (event) => {
+            handleIncomingMessage(event.data);
+          };
+        } catch (e) {
+          console.warn('BroadcastChannel error:', e);
+        }
+      }
+
+      // 3. LocalStorage Event Bus (Cross-window fallback)
+      this.storageListener = (e) => {
+        if (e.key === 'wordle_p2p_bus_' + roomId && e.newValue) {
+          try {
+            const data = JSON.parse(e.newValue);
+            handleIncomingMessage(data);
+          } catch (err) {}
+        }
+      };
+      window.addEventListener('storage', this.storageListener);
+    }
   }
 
   send(data) {
-    if (this.conn && this.conn.open) {
+    const payload = { ...data, _sender: this.instanceId, _ts: Date.now() + Math.random() };
+
+    // 1. Send via WebSocket Server
+    if (this.ws && this.ws.readyState === 1) {
       try {
-        this.conn.send(data);
-      } catch (err) {
-        console.error('Error sending P2P message:', err);
+        this.ws.send(JSON.stringify({
+          type: 'GAME_MESSAGE',
+          roomId: this.roomId,
+          payload
+        }));
+      } catch (e) {
+        console.error('WS send error:', e);
       }
+    }
+
+    // 2. Send via BroadcastChannel
+    if (this.bc) {
+      try {
+        this.bc.postMessage(payload);
+      } catch (e) {
+        console.error('BroadcastChannel send error:', e);
+      }
+    }
+
+    // 3. Send via LocalStorage Event Bus
+    if (typeof localStorage !== 'undefined' && this.roomId) {
+      try {
+        localStorage.setItem('wordle_p2p_bus_' + this.roomId, JSON.stringify(payload));
+      } catch (e) {}
     }
   }
 }

@@ -96,6 +96,29 @@
   --key-hover: #565758;
 }
 
+[data-theme="emerald"] {
+  --bg-primary: #062c24;
+  --bg-secondary: #0a4035;
+  --bg-glass: rgba(10, 64, 53, 0.9);
+  --text-primary: #e6fffa;
+  --text-secondary: #5eead4;
+  --accent-color: #10b981;
+  --accent-hover: #059669;
+  --accent-glow: rgba(16, 185, 129, 0.4);
+  --tile-empty-border: #134e4a;
+  --tile-active-border: #2dd4bf;
+  --tile-active-bg: #042f2e;
+  --color-correct: #10b981;
+  --color-correct-glow: rgba(16, 185, 129, 0.45);
+  --color-present: #f59e0b;
+  --color-present-glow: rgba(245, 158, 11, 0.45);
+  --color-absent: #134e4a;
+  --key-bg: #0f766e;
+  --key-text: #ccfbf1;
+  --key-hover: #115e59;
+}
+
+
 /* High Contrast Accessibility Mode */
 [data-highcontrast="true"] {
   --color-correct: #f5793a !important;
@@ -415,6 +438,13 @@ body {
 
 .tile.shake {
   animation: shakeBoard 0.45s ease-in-out;
+}
+
+.tile-row.invalid-row .tile {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.5) !important;
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.15) !important;
 }
 
 /* Keyboard Styling */

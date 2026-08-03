@@ -7,7 +7,7 @@ import { playKeypressSound, playFlipSound, playCorrectSound, playInvalidSound, p
 import confetti from 'canvas-confetti';
 import { Trophy, Zap, AlertTriangle } from 'lucide-react';
 
-export const LocalMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
+export const LocalMultiplayer = ({ wordLength = 5, maxGuesses = 6, allowInvalidWords = false }) => {
   const [targetWord, setTargetWord] = useState('');
   const [battleMode, setBattleMode] = useState('turn-based'); // 'turn-based' or 'simultaneous'
 
@@ -122,9 +122,10 @@ export const LocalMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
     if (playerNum === 1) {
       if (p1Status !== 'playing') return;
       if (key === 'ENTER') {
-        if (p1Current.length !== wordLength || !isValidWord(p1Current, wordLength)) {
+        if (p1Current.length !== wordLength || !isValidWord(p1Current, wordLength, allowInvalidWords)) {
           setP1Shaking(true);
           playInvalidSound();
+          setP1Current('');
           setTimeout(() => setP1Shaking(false), 500);
           return;
         }
@@ -161,9 +162,10 @@ export const LocalMultiplayer = ({ wordLength = 5, maxGuesses = 6 }) => {
     } else {
       if (p2Status !== 'playing') return;
       if (key === 'ENTER') {
-        if (p2Current.length !== wordLength || !isValidWord(p2Current, wordLength)) {
+        if (p2Current.length !== wordLength || !isValidWord(p2Current, wordLength, allowInvalidWords)) {
           setP2Shaking(true);
           playInvalidSound();
+          setP2Current('');
           setTimeout(() => setP2Shaking(false), 500);
           return;
         }
